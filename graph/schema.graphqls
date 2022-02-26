@@ -1,0 +1,66 @@
+# GraphQL schema example
+#
+# https://gqlgen.com/getting-started/
+
+enum CliqueType {
+  "People who are elite with parents having money"
+  KOOKS
+  "People who desperate to move up the social ladder to become new versions of themselves and establish new beginnings"
+  POGUES
+}
+
+type Character {
+  id: ID!
+  name: String!
+  isHero: Boolean!
+  cliqueType: CliqueType!
+}
+
+input CharacterInput {
+  name: String!
+  id: String
+  isHero: Boolean
+  cliqueType: CliqueType!
+}
+
+
+enum UserType {
+  "Administrator account"
+  ADMIN
+  "Tutor account"
+  TUTOR
+  "Student account"
+  STUDENT
+  "Unvalidated Account"
+  UNVALIDATED
+  "Suspended Account"
+  SUSPENDED
+  "Retired account"
+  RETIRED
+  "Scheduled for deletion"
+  DELETE
+}
+
+type User {
+  id: ID!
+  name: String!
+  userType: UserType!
+}
+
+input UserInput {
+  id: String
+  name: String!
+  userType: UserType!
+}
+
+type Mutation {
+  upsertUser(input: UserInput!) : User!
+  upsertCharacter(input: CharacterInput!): Character!
+}
+
+
+type Query {
+  character(id:ID!): Character
+  characters(cliqueType:CliqueType!): [Character!]
+  user(id:ID!): User
+}
