@@ -2,12 +2,7 @@ package database
 
 import "github.com/neo4j/neo4j-go-driver/v4/neo4j"
 
-func HelloWorld(uri, username, password string) (string, error) {
-	driver, err := neo4j.NewDriver(uri, neo4j.BasicAuth(username, password, ""))
-	if err != nil {
-		return "", err
-	}
-	defer driver.Close()
+func HelloWorld(driver neo4j.Driver) (string, error) {
 
 	session := driver.NewSession(neo4j.SessionConfig{AccessMode: neo4j.AccessModeWrite})
 	defer session.Close()
@@ -33,11 +28,11 @@ func HelloWorld(uri, username, password string) (string, error) {
 	return greeting.(string), nil
 }
 
-func createDriver(uri, username, password string) (neo4j.Driver, error) {
+func CreateDriver(uri, username, password string) (neo4j.Driver, error) {
 	return neo4j.NewDriver(uri, neo4j.BasicAuth(username, password, ""))
 }
 
-// call on application exit
-func closeDriver(driver neo4j.Driver) error {
+// CloseDriver call on application exit
+func CloseDriver(driver neo4j.Driver) error {
 	return driver.Close()
 }

@@ -17,10 +17,8 @@ import (
 	"syscall"
 )
 
-const defaultPort = "8080"
-
 /* Runs the server on a thread */
-func startHttpServer(wg *sync.WaitGroup) *http.Server {
+func startHttpServer(wg *sync.WaitGroup, defaultPort string) *http.Server {
 	srv := handler.NewDefaultServer(generated.NewExecutableSchema(generated.Config{Resolvers: &graph.Resolver{}}))
 
 	http.Handle("/", playground.Handler("GraphQL playground", "/query"))
@@ -53,7 +51,11 @@ func main() {
 
 	port := os.Getenv("PORT")
 	if port == "" {
-		port = defaultPort
+		port = config.DefaultPort
+	}
+	databaseDriver, err := database.CreateDriver(config.Neo4jUri, config.Neo4jUser, config.Neo4jPassword)
+	if err != nil {
+		log.Fatal("cannot load database driver", err)
 	}
 
 	log.Printf("main: starting HTTP server")
@@ -61,11 +63,11 @@ func main() {
 	httpServerExitDone := &sync.WaitGroup{}
 
 	httpServerExitDone.Add(1)
-	srv := startHttpServer(httpServerExitDone)
+	srv := startHttpServer(httpServerExitDone, config.DefaultPort)
 
 	log.Printf("main: serving for 10 seconds")
 
-	if s, e := database.HelloWorld(config.Neo4jUri, config.Neo4jUser, config.Neo4jPassword); e != nil {
+	if s, e := database.HelloWorld(databaseDriver); e != nil {
 		fmt.Println("Not so good : ", s, e)
 	} else {
 		fmt.Println("All good : ", s, e)
@@ -87,6 +89,9 @@ func main() {
 
 	// wait for goroutine started in startHttpServer() to stop
 	httpServerExitDone.Wait()
+
+	// close the database
+	database.CloseDriver(databaseDriver)
 
 	log.Printf("main: done. exiting")
 }

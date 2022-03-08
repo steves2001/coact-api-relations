@@ -8,6 +8,7 @@ type Config struct {
 	Neo4jUri      string `mapstructure:"NEO4J_URI"`
 	Neo4jUser     string `mapstructure:"NEO4J_USER"`
 	Neo4jPassword string `mapstructure:"NEO4J_PASSWORD"`
+	DefaultPort   string `mapstructure:"DEFAULT_PORT"`
 }
 
 // LoadConfig reads configuration from file or environment variables.
