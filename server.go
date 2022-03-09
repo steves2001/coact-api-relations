@@ -49,13 +49,16 @@ func main() {
 
 	fmt.Println(config)
 
+	err = database.CreateDriver(config.Neo4jUri, config.Neo4jUser, config.Neo4jPassword)
+	defer database.CloseDriver()
+
+	if err != nil {
+		log.Fatal("cannot load database driver ", err)
+	}
+
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = config.DefaultPort
-	}
-	databaseDriver, err := database.CreateDriver(config.Neo4jUri, config.Neo4jUser, config.Neo4jPassword)
-	if err != nil {
-		log.Fatal("cannot load database driver", err)
 	}
 
 	log.Printf("main: starting HTTP server")
@@ -67,7 +70,7 @@ func main() {
 
 	log.Printf("main: serving for 10 seconds")
 
-	if s, e := database.HelloWorld(databaseDriver); e != nil {
+	if s, e := database.HelloWorld(); e != nil {
 		fmt.Println("Not so good : ", s, e)
 	} else {
 		fmt.Println("All good : ", s, e)
@@ -89,9 +92,6 @@ func main() {
 
 	// wait for goroutine started in startHttpServer() to stop
 	httpServerExitDone.Wait()
-
-	// close the database
-	database.CloseDriver(databaseDriver)
 
 	log.Printf("main: done. exiting")
 }
