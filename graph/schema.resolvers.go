@@ -7,30 +7,29 @@ import (
 	"context"
 	"fmt"
 	"github.com/gofrs/uuid"
+	"github.com/neo4j/neo4j-go-driver/v4/neo4j"
 	"gql/graph/generated"
 	"gql/graph/model"
 	"strconv"
 )
 
 func (r *mutationResolver) UpsertUser(ctx context.Context, input model.UserInput) (*model.User, error) {
+	// Data holder for
 	var userData model.User
 
 	userData.Name = input.Name
 	userData.UserType = input.UserType
 
-	// No users
-	if len(r.Resolver.UserStore) == 0 {
-		r.Resolver.UserStore = make(map[string]model.User)
-	}
+	session := r.DbDriver.NewSession(neo4j.SessionConfig{AccessMode: neo4j.AccessModeWrite})
+	defer func(session neo4j.Session) {
+		err := session.Close()
+		if err != nil {
 
+		}
+	}(session)
 	// Update or insert?
 	if input.ID != nil {
-		_, ok := r.Resolver.UserStore[*input.ID]
-		if !ok {
-			return nil, fmt.Errorf("not found")
-		}
 		userData.ID = *input.ID
-		r.Resolver.UserStore[*input.ID] = userData
 	} else {
 		// Create a Version 4 UUID.
 		newUuid, err := uuid.NewV4()
@@ -38,10 +37,37 @@ func (r *mutationResolver) UpsertUser(ctx context.Context, input model.UserInput
 			return nil, fmt.Errorf("UUID creation error %v", err)
 		}
 		userData.ID = newUuid.String()
-		r.Resolver.UserStore[newUuid.String()] = userData
 	}
 
-	return &userData, nil
+	result, err := session.WriteTransaction(func(transaction neo4j.Transaction) (interface{}, error) {
+
+		transactionResult, err := transaction.Run(`MERGE (u:User {uuid: $uuid}) 
+ ON CREATE SET u.uuid = $uuid, u.name = $name, u.userType = $userType 
+ ON MATCH SET  u.uuid = $uuid, u.name = $name, u.userType = $userType  
+ RETURN u.uuid, u.name, u.userType`,
+			map[string]interface{}{"uuid": userData.ID, "name": userData.Name, "userType": userData.UserType})
+
+		if err != nil {
+			return nil, err
+		}
+
+		if transactionResult.Next() {
+
+			return &model.User{
+				ID:       transactionResult.Record().Values[0].(string),
+				Name:     transactionResult.Record().Values[1].(string),
+				UserType: model.UserType(transactionResult.Record().Values[2].(string)),
+			}, nil
+
+		}
+
+		return nil, transactionResult.Err()
+	})
+
+	if err != nil {
+		return nil, err
+	}
+	return result.(*model.User), nil
 }
 
 func (r *mutationResolver) UpsertCharacter(ctx context.Context, input model.CharacterInput) (*model.Character, error) {
