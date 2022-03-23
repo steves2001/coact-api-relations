@@ -13,13 +13,23 @@ import (
 	"strconv"
 )
 
+// UpsertUser adds or updates a user in the system
 func (r *mutationResolver) UpsertUser(ctx context.Context, input model.UserInput) (*model.User, error) {
-	// Data holder for
-	var userData model.User
 
-	userData.Name = input.Name
-	userData.UserType = input.UserType
+	// Update or insert?
+	var userId string
 
+	if input.ID != nil {
+		userId = *input.ID
+	} else {
+		newUuid, err := uuid.NewV4() // Create a Version 4 UUID.
+		if err != nil {
+			return nil, fmt.Errorf("UUID creation error %v", err)
+		}
+		userId = newUuid.String()
+	}
+
+	// Open session
 	session := r.DbDriver.NewSession(neo4j.SessionConfig{AccessMode: neo4j.AccessModeWrite})
 	defer func(session neo4j.Session) {
 		err := session.Close()
@@ -27,47 +37,44 @@ func (r *mutationResolver) UpsertUser(ctx context.Context, input model.UserInput
 
 		}
 	}(session)
-	// Update or insert?
-	if input.ID != nil {
-		userData.ID = *input.ID
-	} else {
-		// Create a Version 4 UUID.
-		newUuid, err := uuid.NewV4()
-		if err != nil {
-			return nil, fmt.Errorf("UUID creation error %v", err)
-		}
-		userData.ID = newUuid.String()
+
+	// Start write data to neo4j
+	neo4jWriteResult, neo4jWriteErr := session.WriteTransaction(
+		func(transaction neo4j.Transaction) (interface{}, error) {
+
+			transactionResult, driverNativeErr :=
+				transaction.Run(
+					"MERGE (u:User {uuid: $uuid})  ON CREATE SET u.uuid = $uuid, u.name = $name, u.userType = $userType  ON MATCH SET  u.uuid = $uuid, u.name = $name, u.userType = $userType RETURN u.uuid, u.name, u.userType",
+					map[string]interface{}{"uuid": userId, "name": input.Name, "userType": input.UserType})
+
+			// Raw driver error
+			if driverNativeErr != nil {
+				return nil, driverNativeErr
+			}
+
+			// If result returned
+			if transactionResult.Next() {
+
+				// Return the created nodes data
+				return &model.User{
+					ID:       transactionResult.Record().Values[0].(string),
+					Name:     transactionResult.Record().Values[1].(string),
+					UserType: model.UserType(transactionResult.Record().Values[2].(string)),
+				}, nil
+
+			}
+
+			// Node wasn't created there was an error return this
+			return nil, transactionResult.Err()
+		})
+	// End write data to neo4j
+
+	//  write failed
+	if neo4jWriteErr != nil {
+		return nil, neo4jWriteErr
 	}
-
-	result, err := session.WriteTransaction(func(transaction neo4j.Transaction) (interface{}, error) {
-
-		transactionResult, err := transaction.Run(`MERGE (u:User {uuid: $uuid}) 
- ON CREATE SET u.uuid = $uuid, u.name = $name, u.userType = $userType 
- ON MATCH SET  u.uuid = $uuid, u.name = $name, u.userType = $userType  
- RETURN u.uuid, u.name, u.userType`,
-			map[string]interface{}{"uuid": userData.ID, "name": userData.Name, "userType": userData.UserType})
-
-		if err != nil {
-			return nil, err
-		}
-
-		if transactionResult.Next() {
-
-			return &model.User{
-				ID:       transactionResult.Record().Values[0].(string),
-				Name:     transactionResult.Record().Values[1].(string),
-				UserType: model.UserType(transactionResult.Record().Values[2].(string)),
-			}, nil
-
-		}
-
-		return nil, transactionResult.Err()
-	})
-
-	if err != nil {
-		return nil, err
-	}
-	return result.(*model.User), nil
+	// write success
+	return neo4jWriteResult.(*model.User), nil
 }
 
 func (r *mutationResolver) UpsertCharacter(ctx context.Context, input model.CharacterInput) (*model.Character, error) {
