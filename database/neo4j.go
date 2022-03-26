@@ -1,6 +1,7 @@
 package database
 
 import (
+	"fmt"
 	"github.com/neo4j/neo4j-go-driver/v4/neo4j"
 	"log"
 	"strings"
@@ -93,7 +94,7 @@ func UpdateInsertQuery(node SearchNode, insertionData map[string]string) (map[st
 			}
 
 			// Node wasn't created there was an error return this
-			return nil, transactionResult.Err()
+			return nodeProperties, transactionResult.Err()
 		})
 	// End write data to neo4j
 
@@ -104,4 +105,74 @@ func UpdateInsertQuery(node SearchNode, insertionData map[string]string) (map[st
 
 	// write success
 	return neo4jWriteResult.(map[string]string), nil
+}
+
+// SimpleQuery Insert or Update a user into the database
+func SimpleQuery(node SearchNode, propertyData []string) (map[string]string, error) {
+
+	// Open session
+	session := Driver.NewSession(neo4j.SessionConfig{AccessMode: neo4j.AccessModeRead})
+	defer func(session neo4j.Session) {
+		err := session.Close()
+		if err != nil {
+			log.Println(err)
+		}
+	}(session)
+
+	queryReturnParameters := ""
+	for _, property := range propertyData {
+		queryReturnParameters += " n." + property + " AS " + property + ","
+	}
+	queryReturnParameters = strings.Trim(queryReturnParameters, ",")
+
+	var queryData = make(map[string]interface{})
+	queryData[node.SearchKey] = node.SearchValue
+
+	var query strings.Builder
+	query.WriteString("MATCH (n:")
+	query.WriteString(node.NodeName)
+	query.WriteString("{" + node.SearchKey + ": $" + node.SearchKey + "})")
+	query.WriteString(" RETURN")
+	query.WriteString(queryReturnParameters)
+
+	// Start write data to neo4j
+	neo4jReadResult, neo4jReadErr := session.ReadTransaction(
+		func(transaction neo4j.Transaction) (interface{}, error) {
+
+			transactionResult, driverNativeErr :=
+				transaction.Run(query.String(), queryData)
+
+			// Raw driver error
+			if driverNativeErr != nil {
+				return nil, driverNativeErr
+			}
+
+			nodeProperties := make(map[string]string)
+
+			record, err := transactionResult.Single()
+
+			if err != nil {
+				return nil, transactionResult.Err()
+			}
+
+			// If result returned
+			for index, property := range record.Keys {
+				nodeProperties[property] = record.Values[index].(string)
+			}
+			// Return the created nodes data
+			return nodeProperties, nil
+
+		})
+	// End write data to neo4j
+
+	//  write failed
+	if neo4jReadErr != nil {
+		return nil, neo4jReadErr
+	}
+
+	if neo4jReadResult != nil {
+		return neo4jReadResult.(map[string]string), nil
+	}
+	// write success
+	return nil, fmt.Errorf("not found")
 }

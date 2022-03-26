@@ -96,7 +96,20 @@ func (r *queryResolver) Characters(ctx context.Context, cliqueType model.CliqueT
 }
 
 func (r *queryResolver) User(ctx context.Context, id string) (*model.User, error) {
-	panic(fmt.Errorf("not implemented"))
+
+	user := model.User{
+		ID:       id,
+		Name:     "",
+		UserType: ""}
+
+	result, err := r.QueryUser(user)
+
+	if err != nil {
+		return nil, fmt.Errorf("not found")
+	}
+
+	return result, err
+	//panic(fmt.Errorf("not implemented"))
 }
 
 // Mutation returns generated.MutationResolver implementation.
