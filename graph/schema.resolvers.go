@@ -16,7 +16,7 @@ import (
 // UpsertUser adds or updates a user in the system
 func (r *mutationResolver) UpsertUser(ctx context.Context, input model.UserInput) (*model.User, error) {
 
-	// Update or insert?
+	// Update or insert defined by the presence of an user ID value?
 	var userId string
 
 	if input.ID != nil {
@@ -29,16 +29,14 @@ func (r *mutationResolver) UpsertUser(ctx context.Context, input model.UserInput
 		userId = newUuid.String()
 	}
 
-	data := map[string]string{"uuid": userId, "name": input.Name, "userType": input.UserType.String()}
-	result, err := r.UpdateInsertQuery(SimpleSearchNode{"User", "uuid", userId},
-		data)
+	user := model.User{
+		ID:       userId,
+		Name:     input.Name,
+		UserType: input.UserType}
 
-	// Return the created/updated nodes data
-	return &model.User{
-		ID:       result["uuid"],
-		Name:     result["name"],
-		UserType: model.UserType(result["userType"]),
-	}, err
+	result, err := r.UpdateInsertUser(user)
+
+	return result, err
 }
 
 func (r *mutationResolver) UpsertCharacter(ctx context.Context, input model.CharacterInput) (*model.Character, error) {

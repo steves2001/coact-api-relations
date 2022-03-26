@@ -2,10 +2,8 @@ package graph
 
 //go:generate go run github.com/99designs/gqlgen generate
 import (
-	"github.com/neo4j/neo4j-go-driver/v4/neo4j"
+	"gql/database"
 	"gql/graph/model"
-	"log"
-	"strings"
 )
 
 // This file will not be regenerated automatically.
@@ -13,86 +11,28 @@ import (
 // It serves as dependency injection for your app, add any dependencies you require here.
 
 type Resolver struct {
-	DbDriver       neo4j.Driver
 	CharacterStore map[string]model.Character
 	UserStore      map[string]model.User
 }
 
-// SimpleSearchNode node used for basic single parameter search, multi param to be implemented later
-type SimpleSearchNode struct {
-	NodeName    string
-	SearchKey   string
-	SearchValue string
-}
+// UpdateInsertUser Convert model a map then call the db method to update or insert a user
+func (r Resolver) UpdateInsertUser(insertionData model.User) (*model.User, error) {
 
-func (r Resolver) UpdateInsertQuery(node SimpleSearchNode, insertionData map[string]string) (map[string]string, error) {
+	// Unpack data for the database model to map
+	userData := map[string]string{"uuid": insertionData.ID, "name": insertionData.Name, "userType": insertionData.UserType.String()}
 
-	// Open session
-	session := r.DbDriver.NewSession(neo4j.SessionConfig{AccessMode: neo4j.AccessModeWrite})
-	defer func(session neo4j.Session) {
-		err := session.Close()
-		if err != nil {
-			log.Println(err)
-		}
-	}(session)
+	result, databaseErr := database.UpdateInsertQuery(database.SearchNode{NodeName: "User", SearchKey: "uuid", SearchValue: insertionData.ID},
+		userData)
 
-	var queryParameters = ""
-	var queryReturnParameters = ""
-	var queryData = make(map[string]interface{})
-	for property, value := range insertionData {
-		queryParameters += " n." + property + " = $" + property + ","
-		queryReturnParameters += " n." + property + " AS " + property + ","
-		queryData[property] = value
+	// Database error returned
+	if databaseErr != nil {
+		return nil, databaseErr
 	}
 
-	queryParameters = strings.Trim(queryParameters, ",")
-	queryReturnParameters = strings.Trim(queryReturnParameters, ",")
-
-	var query strings.Builder
-	query.WriteString("MERGE (n:")
-	query.WriteString(node.NodeName)
-	query.WriteString("{" + node.SearchKey + ": $" + node.SearchKey + "})")
-	query.WriteString(" ON CREATE SET")
-	query.WriteString(queryParameters)
-	query.WriteString(" ON MATCH SET")
-	query.WriteString(queryParameters)
-	query.WriteString(" RETURN")
-	query.WriteString(queryReturnParameters)
-
-	// Start write data to neo4j
-	neo4jWriteResult, neo4jWriteErr := session.WriteTransaction(
-		func(transaction neo4j.Transaction) (interface{}, error) {
-
-			transactionResult, driverNativeErr :=
-				transaction.Run(query.String(), queryData)
-
-			// Raw driver error
-			if driverNativeErr != nil {
-				return nil, driverNativeErr
-			}
-			nodeProperties := make(map[string]string)
-			// If result returned
-			if transactionResult.Next() {
-
-				for index, property := range transactionResult.Record().Keys {
-					nodeProperties[property] = transactionResult.Record().Values[index].(string)
-				}
-				// Return the created nodes data
-				return nodeProperties, nil
-
-			}
-
-			// Node wasn't created there was an error return this
-			return nil, transactionResult.Err()
-		})
-	// End write data to neo4j
-
-	//  write failed
-	if neo4jWriteErr != nil {
-		return nil, neo4jWriteErr
-	}
-
-	// write success
-	return neo4jWriteResult.(map[string]string), nil
-
+	// Return the node created/updated data
+	return &model.User{
+		ID:       result["uuid"],
+		Name:     result["name"],
+		UserType: model.UserType(result["userType"]),
+	}, nil
 }

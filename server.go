@@ -4,7 +4,6 @@ import (
 	"context"
 	"github.com/99designs/gqlgen/graphql/handler"
 	"github.com/99designs/gqlgen/graphql/playground"
-	"github.com/neo4j/neo4j-go-driver/v4/neo4j"
 	"gql/database"
 	"gql/graph"
 	"gql/graph/generated"
@@ -18,8 +17,8 @@ import (
 )
 
 /* Runs the server on a thread */
-func startHttpServer(wg *sync.WaitGroup, defaultPort string, dbDriver neo4j.Driver) *http.Server {
-	srv := handler.NewDefaultServer(generated.NewExecutableSchema(generated.Config{Resolvers: &graph.Resolver{DbDriver: dbDriver}}))
+func startHttpServer(wg *sync.WaitGroup, defaultPort string) *http.Server {
+	srv := handler.NewDefaultServer(generated.NewExecutableSchema(generated.Config{Resolvers: &graph.Resolver{}}))
 
 	http.Handle("/", playground.Handler("GraphQL playground", "/query"))
 	http.Handle("/query", srv)
@@ -70,7 +69,7 @@ func main() {
 	// Run server on separate thread
 	httpServerExitDone := &sync.WaitGroup{}
 	httpServerExitDone.Add(1)
-	srv := startHttpServer(httpServerExitDone, config.DefaultPort, database.Driver)
+	srv := startHttpServer(httpServerExitDone, config.DefaultPort)
 
 	// Setting up signal capturing then wait for the ctrl+c
 	stop := make(chan os.Signal, 1)
