@@ -10,6 +10,14 @@ var Driver neo4j.Driver
 func CreateDriver(uri, username, password string) error {
 	var err error
 	Driver, err = neo4j.NewDriver(uri, neo4j.BasicAuth(username, password, ""))
+
+	// Local driver error
+	if err != nil {
+		return err
+	}
+
+	// Verify Connectivity
+	err = Driver.VerifyConnectivity()
 	return err
 }
 

@@ -7,7 +7,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/gofrs/uuid"
-	"github.com/neo4j/neo4j-go-driver/v4/neo4j"
+	//"github.com/neo4j/neo4j-go-driver/v4/neo4j"
 	"gql/graph/generated"
 	"gql/graph/model"
 	"strconv"
@@ -29,52 +29,16 @@ func (r *mutationResolver) UpsertUser(ctx context.Context, input model.UserInput
 		userId = newUuid.String()
 	}
 
-	// Open session
-	session := r.DbDriver.NewSession(neo4j.SessionConfig{AccessMode: neo4j.AccessModeWrite})
-	defer func(session neo4j.Session) {
-		err := session.Close()
-		if err != nil {
+	data := map[string]string{"uuid": userId, "name": input.Name, "userType": input.UserType.String()}
+	result, err := r.UpdateInsertQuery(SimpleSearchNode{"User", "uuid", userId},
+		data)
 
-		}
-	}(session)
-
-	// Start write data to neo4j
-	neo4jWriteResult, neo4jWriteErr := session.WriteTransaction(
-		func(transaction neo4j.Transaction) (interface{}, error) {
-
-			transactionResult, driverNativeErr :=
-				transaction.Run(
-					"MERGE (u:User {uuid: $uuid})  ON CREATE SET u.uuid = $uuid, u.name = $name, u.userType = $userType  ON MATCH SET  u.uuid = $uuid, u.name = $name, u.userType = $userType RETURN u.uuid, u.name, u.userType",
-					map[string]interface{}{"uuid": userId, "name": input.Name, "userType": input.UserType})
-
-			// Raw driver error
-			if driverNativeErr != nil {
-				return nil, driverNativeErr
-			}
-
-			// If result returned
-			if transactionResult.Next() {
-
-				// Return the created nodes data
-				return &model.User{
-					ID:       transactionResult.Record().Values[0].(string),
-					Name:     transactionResult.Record().Values[1].(string),
-					UserType: model.UserType(transactionResult.Record().Values[2].(string)),
-				}, nil
-
-			}
-
-			// Node wasn't created there was an error return this
-			return nil, transactionResult.Err()
-		})
-	// End write data to neo4j
-
-	//  write failed
-	if neo4jWriteErr != nil {
-		return nil, neo4jWriteErr
-	}
-	// write success
-	return neo4jWriteResult.(*model.User), nil
+	// Return the created/updated nodes data
+	return &model.User{
+		ID:       result["uuid"],
+		Name:     result["name"],
+		UserType: model.UserType(result["userType"]),
+	}, err
 }
 
 func (r *mutationResolver) UpsertCharacter(ctx context.Context, input model.CharacterInput) (*model.Character, error) {

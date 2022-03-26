@@ -51,7 +51,9 @@ func main() {
 	fmt.Println(config)
 
 	err = database.CreateDriver(config.Neo4jUri, config.Neo4jUser, config.Neo4jPassword)
-	defer database.CloseDriver()
+	defer func() {
+		_ = database.CloseDriver()
+	}()
 
 	if err != nil {
 		log.Fatal("cannot load database driver ", err)
@@ -70,12 +72,6 @@ func main() {
 	srv := startHttpServer(httpServerExitDone, config.DefaultPort, database.Driver)
 
 	log.Printf("main: serving for 10 seconds")
-
-	if s, e := graph.Resolver.HelloWorld(graph.Resolver{DbDriver: database.Driver}); e != nil {
-		fmt.Println("Not so good : ", s, e)
-	} else {
-		fmt.Println("All good : ", s, e)
-	}
 
 	// Setting up signal capturing then wait for the ctrl+c
 	stop := make(chan os.Signal, 1)
