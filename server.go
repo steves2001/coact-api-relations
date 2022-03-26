@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"github.com/99designs/gqlgen/graphql/handler"
 	"github.com/99designs/gqlgen/graphql/playground"
 	"github.com/neo4j/neo4j-go-driver/v4/neo4j"
@@ -48,8 +47,9 @@ func main() {
 		log.Fatal("cannot load config:", err)
 	}
 
-	fmt.Println(config)
+	// fmt.Println(config)
 
+	// Connect to neo4j
 	err = database.CreateDriver(config.Neo4jUri, config.Neo4jUser, config.Neo4jPassword)
 	defer func() {
 		_ = database.CloseDriver()
@@ -59,6 +59,7 @@ func main() {
 		log.Fatal("cannot load database driver ", err)
 	}
 
+	// Override default if set in env
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = config.DefaultPort
@@ -66,12 +67,10 @@ func main() {
 
 	log.Printf("main: starting HTTP server")
 
+	// Run server on separate thread
 	httpServerExitDone := &sync.WaitGroup{}
-
 	httpServerExitDone.Add(1)
 	srv := startHttpServer(httpServerExitDone, config.DefaultPort, database.Driver)
-
-	log.Printf("main: serving for 10 seconds")
 
 	// Setting up signal capturing then wait for the ctrl+c
 	stop := make(chan os.Signal, 1)
@@ -82,7 +81,6 @@ func main() {
 
 	// now close the server gracefully ("shutdown")
 	// timeout could be given with a proper context
-	// (in real world you shouldn't use TODO()).
 	if err := srv.Shutdown(context.Background()); err != nil {
 		panic(err) // failure/timeout shutting down the server gracefully
 	}

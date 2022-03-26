@@ -18,6 +18,7 @@ type Resolver struct {
 	UserStore      map[string]model.User
 }
 
+// SimpleSearchNode node used for basic single parameter search, multi param to be implemented later
 type SimpleSearchNode struct {
 	NodeName    string
 	SearchKey   string
@@ -43,6 +44,7 @@ func (r Resolver) UpdateInsertQuery(node SimpleSearchNode, insertionData map[str
 		queryReturnParameters += " n." + property + " AS " + property + ","
 		queryData[property] = value
 	}
+
 	queryParameters = strings.Trim(queryParameters, ",")
 	queryReturnParameters = strings.Trim(queryReturnParameters, ",")
 
