@@ -11,8 +11,7 @@ import (
 // It serves as dependency injection for your app, add any dependencies you require here.
 
 type Resolver struct {
-	CharacterStore map[string]model.Character
-	UserStore      map[string]model.User
+	UserStore map[string]model.User
 }
 
 // UpdateInsertUser Convert model a map then call the db method to update or insert a user
