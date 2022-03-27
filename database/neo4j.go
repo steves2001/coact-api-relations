@@ -15,6 +15,9 @@ type SearchNode struct {
 	SearchValue string
 }
 
+// Public functions
+
+// CreateDriver call once at start of application
 func CreateDriver(uri, username, password string) error {
 	var err error
 	Driver, err = neo4j.NewDriver(uri, neo4j.BasicAuth(username, password, ""))
@@ -35,21 +38,13 @@ func CloseDriver() error {
 	return Driver.Close()
 }
 
-// UpdateInsertQuery Insert or Update a user into the database
+// UpdateInsertQuery Insert or Update a node into the database
 func UpdateInsertQuery(node SearchNode, insertionData map[string]string) (map[string]string, error) {
-
-	// Open session
-	session := Driver.NewSession(neo4j.SessionConfig{AccessMode: neo4j.AccessModeWrite})
-	defer func(session neo4j.Session) {
-		err := session.Close()
-		if err != nil {
-			log.Println(err)
-		}
-	}(session)
 
 	var queryParameters = ""
 	var queryReturnParameters = ""
 	var queryData = make(map[string]interface{})
+
 	for property, value := range insertionData {
 		queryParameters += " n." + property + " = $" + property + ","
 		queryReturnParameters += " n." + property + " AS " + property + ","
@@ -70,12 +65,85 @@ func UpdateInsertQuery(node SearchNode, insertionData map[string]string) (map[st
 	query.WriteString(" RETURN")
 	query.WriteString(queryReturnParameters)
 
+	neo4jWriteResult, neo4jWriteErr := writeSingleNodeToDB(query.String(), queryData)
+
+	//  write failed
+	if neo4jWriteErr != nil {
+		return nil, neo4jWriteErr
+	}
+
+	// write success
+	if neo4jWriteResult != nil {
+		return neo4jWriteResult.(map[string]string), nil
+	}
+
+	return nil, fmt.Errorf("single node write operation did not return a result")
+}
+
+// SimpleQuery Find a node in the database on a single property
+func SimpleQuery(node SearchNode, propertyData []string) (map[string]string, error) {
+
+	queryReturnParameters := ""
+	for _, property := range propertyData {
+		queryReturnParameters += " n." + property + " AS " + property + ","
+	}
+	queryReturnParameters = strings.Trim(queryReturnParameters, ",")
+	//queryReturnParameters += " n"
+
+	var queryData = make(map[string]interface{})
+	queryData[node.SearchKey] = node.SearchValue
+
+	var query strings.Builder
+	query.WriteString("MATCH (n:")
+	query.WriteString(node.NodeName)
+	query.WriteString("{" + node.SearchKey + ": $" + node.SearchKey + "})")
+	query.WriteString(" RETURN")
+	query.WriteString(queryReturnParameters)
+
+	neo4jReadResult, neo4jReadErr := readSingleNodeFromDB(query.String(), queryData)
+
+	//  read failed
+	if neo4jReadErr != nil {
+		return nil, fmt.Errorf("single node search did not find node %s with a property %s containing the value %s", node.NodeName, node.SearchKey, node.SearchValue)
+		return nil, neo4jReadErr
+	}
+
+	// read found a result
+	if neo4jReadResult != nil {
+		return neo4jReadResult.(map[string]string), nil
+	}
+
+	// Catch all statement shouldn't execute but as a safety net.  Would require nil, nil readSingleNodeFromDB return
+	return nil, fmt.Errorf("single node search returned an nil record set with nil error for node %s with a property %s containing the value %s",
+		node.NodeName, node.SearchKey, node.SearchValue)
+}
+
+func NodeQuery(nodeName string, nodeFilter string, limit int64) (*[]map[string]string, error) {
+
+	m := make([]map[string]string, 3)
+
+	return &m, nil
+}
+
+// Private functions
+
+func writeSingleNodeToDB(cypher string, params map[string]interface{}) (interface{}, error) {
+
+	// Open session
+	session := Driver.NewSession(neo4j.SessionConfig{AccessMode: neo4j.AccessModeWrite})
+	defer func(session neo4j.Session) {
+		err := session.Close()
+		if err != nil {
+			log.Println(err)
+		}
+	}(session)
+
 	// Start write data to neo4j
 	neo4jWriteResult, neo4jWriteErr := session.WriteTransaction(
 		func(transaction neo4j.Transaction) (interface{}, error) {
 
 			transactionResult, driverNativeErr :=
-				transaction.Run(query.String(), queryData)
+				transaction.Run(cypher, params)
 
 			// Raw driver error
 			if driverNativeErr != nil {
@@ -96,19 +164,12 @@ func UpdateInsertQuery(node SearchNode, insertionData map[string]string) (map[st
 			// Node wasn't created there was an error return this
 			return nodeProperties, transactionResult.Err()
 		})
-	// End write data to neo4j
 
-	//  write failed
-	if neo4jWriteErr != nil {
-		return nil, neo4jWriteErr
-	}
+	return neo4jWriteResult, neo4jWriteErr
 
-	// write success
-	return neo4jWriteResult.(map[string]string), nil
 }
 
-// SimpleQuery Insert or Update a user into the database
-func SimpleQuery(node SearchNode, propertyData []string) (map[string]string, error) {
+func readSingleNodeFromDB(cypher string, params map[string]interface{}) (interface{}, error) {
 
 	// Open session
 	session := Driver.NewSession(neo4j.SessionConfig{AccessMode: neo4j.AccessModeRead})
@@ -119,28 +180,11 @@ func SimpleQuery(node SearchNode, propertyData []string) (map[string]string, err
 		}
 	}(session)
 
-	queryReturnParameters := ""
-	for _, property := range propertyData {
-		queryReturnParameters += " n." + property + " AS " + property + ","
-	}
-	queryReturnParameters = strings.Trim(queryReturnParameters, ",")
-
-	var queryData = make(map[string]interface{})
-	queryData[node.SearchKey] = node.SearchValue
-
-	var query strings.Builder
-	query.WriteString("MATCH (n:")
-	query.WriteString(node.NodeName)
-	query.WriteString("{" + node.SearchKey + ": $" + node.SearchKey + "})")
-	query.WriteString(" RETURN")
-	query.WriteString(queryReturnParameters)
-
-	// Start write data to neo4j
 	neo4jReadResult, neo4jReadErr := session.ReadTransaction(
 		func(transaction neo4j.Transaction) (interface{}, error) {
 
 			transactionResult, driverNativeErr :=
-				transaction.Run(query.String(), queryData)
+				transaction.Run(cypher, params)
 
 			// Raw driver error
 			if driverNativeErr != nil {
@@ -163,16 +207,37 @@ func SimpleQuery(node SearchNode, propertyData []string) (map[string]string, err
 			return nodeProperties, nil
 
 		})
-	// End write data to neo4j
 
-	//  write failed
-	if neo4jReadErr != nil {
-		return nil, neo4jReadErr
-	}
+	return neo4jReadResult, neo4jReadErr
 
-	if neo4jReadResult != nil {
-		return neo4jReadResult.(map[string]string), nil
-	}
-	// write success
-	return nil, fmt.Errorf("not found")
+}
+
+func readNodesFromDB(cypher string, params map[string]interface{}) (interface{}, error) {
+
+	// Open session
+	session := Driver.NewSession(neo4j.SessionConfig{AccessMode: neo4j.AccessModeRead})
+	defer func(session neo4j.Session) {
+		err := session.Close()
+		if err != nil {
+			log.Println(err)
+		}
+	}(session)
+
+	neo4jReadResult, neo4jReadErr := session.ReadTransaction(
+		func(transaction neo4j.Transaction) (interface{}, error) {
+
+			transactionResult, driverNativeErr :=
+				transaction.Run(cypher, params)
+
+			// Raw driver error
+			if driverNativeErr != nil {
+				return nil, driverNativeErr
+			}
+
+			// Return the created nodes data
+			return transactionResult, nil
+
+		})
+
+	return neo4jReadResult, neo4jReadErr
 }

@@ -105,6 +105,7 @@ func (r *queryResolver) User(ctx context.Context, id string) (*model.User, error
 	result, err := r.QueryUser(user)
 
 	if err != nil {
+		return nil, err
 		return nil, fmt.Errorf("not found")
 	}
 
