@@ -60,3 +60,32 @@ func (r Resolver) QueryUser(userData model.User) (*model.User, error) {
 	}, nil
 
 }
+
+func (r Resolver) QueryUsers(userData model.User) ([]model.User, error) {
+
+	searchParameters := map[string]string{"UserType": userData.UserType.String()}
+	result, databaseErr := database.NodeQuery(database.MultiParamSearchNode{
+		NodeName:     "User",
+		SearchParams: searchParameters,
+		SearchLimit:  0,
+		Ordering:     nil,
+		Descending:   false,
+	})
+	// Database error returned
+	if databaseErr != nil {
+		return nil, databaseErr
+	}
+
+	var u []model.User
+	for _, currentData := range *result {
+		// change map to users
+		u = append(u, model.User{
+			ID:       currentData["uuid"],
+			Name:     currentData["name"],
+			UserType: model.UserType(currentData["userType"]),
+		})
+	}
+
+	return u, nil
+
+}

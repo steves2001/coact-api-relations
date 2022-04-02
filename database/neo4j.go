@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/neo4j/neo4j-go-driver/v4/neo4j"
 	"log"
+	"strconv"
 	"strings"
 )
 
@@ -13,6 +14,14 @@ type SearchNode struct {
 	NodeName    string
 	SearchKey   string
 	SearchValue string
+}
+
+type MultiParamSearchNode struct {
+	NodeName     string
+	SearchParams map[string]string
+	SearchLimit  int64
+	Ordering     []string
+	Descending   bool
 }
 
 // Public functions
@@ -105,7 +114,7 @@ func SimpleQuery(node SearchNode, propertyData []string) (map[string]string, err
 	//  read failed
 	if neo4jReadErr != nil {
 		return nil, fmt.Errorf("single node search did not find node %s with a property %s containing the value %s", node.NodeName, node.SearchKey, node.SearchValue)
-		return nil, neo4jReadErr
+		//return nil, neo4jReadErr
 	}
 
 	// read found a result
@@ -118,15 +127,88 @@ func SimpleQuery(node SearchNode, propertyData []string) (map[string]string, err
 		node.NodeName, node.SearchKey, node.SearchValue)
 }
 
-func NodeQuery(nodeName string, nodeFilter string, limit int64) (*[]map[string]string, error) {
+func NodeQuery(node MultiParamSearchNode) (*[]map[string]string, error) {
+	// MATCH (n:User) WHERE n.userType = "STUDENT" RETURN n
+	querySearchProperties := ""
 
-	m := make([]map[string]string, 3)
+	var queryData = make(map[string]interface{})
 
-	return &m, nil
+	for propertyName, propertyVal := range node.SearchParams {
+		querySearchProperties += " n." + propertyName + " = $" + propertyName + ","
+		queryData[propertyName] = propertyVal
+	}
+
+	querySearchProperties = " WHERE" + strings.Trim(querySearchProperties, ",")
+
+	queryReturnParameters := " n"
+
+	queryOrdering := ""
+
+	for _, propertyVal := range node.Ordering {
+		queryOrdering += "n." + propertyVal + ", "
+	}
+
+	if len(queryOrdering) > 0 {
+		queryOrdering = " ORDER BY " + strings.Trim(queryOrdering, ",")
+		if node.Descending {
+			queryOrdering += queryOrdering + " DESC"
+		}
+	}
+
+	var query strings.Builder
+	query.WriteString("MATCH (n:")
+	query.WriteString(node.NodeName)
+	query.WriteString(")" + querySearchProperties + "")
+	query.WriteString(" RETURN")
+	query.WriteString(queryReturnParameters)
+	query.WriteString(queryOrdering)
+	if node.SearchLimit > 0 {
+		query.WriteString(" LIMIT " + strconv.FormatInt(node.SearchLimit, 10))
+	}
+
+	neo4jReadResult, neo4jReadErr := readNodesFromDB(query.String(), queryData)
+
+	//  read failed
+	if neo4jReadErr != nil {
+		return nil, fmt.Errorf("node search did not find any nodes %s", node.NodeName)
+		//return nil, neo4jReadErr
+	}
+
+	// read found a result
+	if neo4jReadResult != nil {
+		// TODO Need a loop to process the returned data to the correct format.
+		//return &neo4jReadResult.([]map[string]string), nil
+
+		var m []map[string]string
+		for neo4jReadResult.(neo4j.Result).Next() {
+			record := neo4jReadResult.(neo4j.Result).Record()
+			currentNode := record.Values[0].(neo4j.Node)
+			var nodeProps map[string]string
+			for key, val := range currentNode.Props {
+				nodeProps[key] = fmt.Sprintf("%v", val)
+			}
+			m = append(m, nodeProps)
+
+		}
+		return &m, nil
+	}
+
+	// Catch all statement shouldn't execute but as a safety net.  Would require nil, nil readSingleNodeFromDB return
+	return nil, fmt.Errorf("node search returned an nil record set with nil errors")
+
 }
 
 // Private functions
+func mapToString(mapData map[string]string, pairStart string, separator string, pairEnd string) string {
 
+	keyValuePairs := make([]string, 0, len(mapData))
+
+	for key := range mapData {
+		keyValuePairs = append(keyValuePairs, pairStart+key+separator+mapData[key]+pairEnd)
+	}
+
+	return strings.Join(keyValuePairs, ", ")
+}
 func writeSingleNodeToDB(cypher string, params map[string]interface{}) (interface{}, error) {
 
 	// Open session
