@@ -127,8 +127,8 @@ func SimpleQuery(node SearchNode, propertyData []string) (map[string]string, err
 		node.NodeName, node.SearchKey, node.SearchValue)
 }
 
-func NodeQuery(node MultiParamSearchNode) ([]map[string]string, error) {
-	// MATCH (n:User) WHERE n.userType = "STUDENT" RETURN n
+func NodeQuery(node MultiParamSearchNode) (*[]map[string]string, error) {
+
 	querySearchProperties := ""
 
 	var queryData = make(map[string]interface{})
@@ -186,16 +186,7 @@ func NodeQuery(node MultiParamSearchNode) ([]map[string]string, error) {
 }
 
 // Private functions
-func mapToString(mapData map[string]string, pairStart string, separator string, pairEnd string) string {
 
-	keyValuePairs := make([]string, 0, len(mapData))
-
-	for key := range mapData {
-		keyValuePairs = append(keyValuePairs, pairStart+key+separator+mapData[key]+pairEnd)
-	}
-
-	return strings.Join(keyValuePairs, ", ")
-}
 func writeSingleNodeToDB(cypher string, params map[string]interface{}) (interface{}, error) {
 
 	// Open session
@@ -237,7 +228,6 @@ func writeSingleNodeToDB(cypher string, params map[string]interface{}) (interfac
 	return neo4jWriteResult, neo4jWriteErr
 
 }
-
 func readSingleNodeFromDB(cypher string, params map[string]interface{}) (interface{}, error) {
 
 	// Open session
@@ -280,7 +270,7 @@ func readSingleNodeFromDB(cypher string, params map[string]interface{}) (interfa
 	return neo4jReadResult, neo4jReadErr
 
 }
-func readNodesFromDB(cypher string, params map[string]interface{}) ([]map[string]string, error) {
+func readNodesFromDB(cypher string, params map[string]interface{}) (*[]map[string]string, error) {
 	// Open session
 	session := Driver.NewSession(neo4j.SessionConfig{AccessMode: neo4j.AccessModeRead})
 	defer func(session neo4j.Session) {
@@ -319,5 +309,5 @@ func readNodesFromDB(cypher string, params map[string]interface{}) ([]map[string
 
 	}
 
-	return m, neo4jReadErr
+	return &m, neo4jReadErr
 }

@@ -78,7 +78,7 @@ func (r Resolver) QueryUsers(userData model.User) ([]model.User, error) {
 
 	var u []model.User
 
-	for _, currentData := range resultPtr {
+	for _, currentData := range *resultPtr {
 		// change map to users
 		u = append(u, model.User{
 			ID:       currentData["uuid"],
