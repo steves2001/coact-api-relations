@@ -127,7 +127,7 @@ func SimpleQuery(node SearchNode, propertyData []string) (map[string]string, err
 		node.NodeName, node.SearchKey, node.SearchValue)
 }
 
-func NodeQuery(node MultiParamSearchNode) (*[]map[string]string, error) {
+func NodeQuery(node MultiParamSearchNode) ([]map[string]string, error) {
 	// MATCH (n:User) WHERE n.userType = "STUDENT" RETURN n
 	querySearchProperties := ""
 
@@ -176,21 +176,8 @@ func NodeQuery(node MultiParamSearchNode) (*[]map[string]string, error) {
 
 	// read found a result
 	if neo4jReadResult != nil {
-		// TODO Need a loop to process the returned data to the correct format.
-		//return &neo4jReadResult.([]map[string]string), nil
 
-		var m []map[string]string
-		for neo4jReadResult.(neo4j.Result).Next() {
-			record := neo4jReadResult.(neo4j.Result).Record()
-			currentNode := record.Values[0].(neo4j.Node)
-			var nodeProps map[string]string
-			for key, val := range currentNode.Props {
-				nodeProps[key] = fmt.Sprintf("%v", val)
-			}
-			m = append(m, nodeProps)
-
-		}
-		return &m, nil
+		return neo4jReadResult, nil
 	}
 
 	// Catch all statement shouldn't execute but as a safety net.  Would require nil, nil readSingleNodeFromDB return
@@ -293,9 +280,7 @@ func readSingleNodeFromDB(cypher string, params map[string]interface{}) (interfa
 	return neo4jReadResult, neo4jReadErr
 
 }
-
-func readNodesFromDB(cypher string, params map[string]interface{}) (interface{}, error) {
-
+func readNodesFromDB(cypher string, params map[string]interface{}) ([]map[string]string, error) {
 	// Open session
 	session := Driver.NewSession(neo4j.SessionConfig{AccessMode: neo4j.AccessModeRead})
 	defer func(session neo4j.Session) {
@@ -317,9 +302,22 @@ func readNodesFromDB(cypher string, params map[string]interface{}) (interface{},
 			}
 
 			// Return the created nodes data
-			return transactionResult, nil
-
+			return transactionResult.Collect()
 		})
 
-	return neo4jReadResult, neo4jReadErr
+	var m []map[string]string
+
+	for _, node := range neo4jReadResult.([]*neo4j.Record) {
+
+		nodeProps := make(map[string]string, len(node.Values[0].(neo4j.Node).Props))
+
+		for key, val := range node.Values[0].(neo4j.Node).Props {
+			nodeProps[key] = fmt.Sprintf("%v", val)
+		}
+
+		m = append(m, nodeProps)
+
+	}
+
+	return m, neo4jReadErr
 }
