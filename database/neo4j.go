@@ -127,6 +127,7 @@ func SimpleQuery(node SearchNode, propertyData []string) (map[string]string, err
 		node.NodeName, node.SearchKey, node.SearchValue)
 }
 
+// NodeQuery Query that returns multiple nodes
 func NodeQuery(node MultiParamSearchNode) (*[]map[string]string, error) {
 
 	querySearchProperties := ""

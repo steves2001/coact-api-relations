@@ -46,18 +46,18 @@ func (r *queryResolver) User(ctx context.Context, id string) (*model.User, error
 
 	if err != nil {
 		return nil, err
-		return nil, fmt.Errorf("not found")
 	}
 
 	return result, err
-	//panic(fmt.Errorf("not implemented"))
 }
 
 func (r *queryResolver) Users(ctx context.Context, userType model.UserType) ([]*model.User, error) {
-	var queryUser model.User
-	queryUser.UserType = userType
 
-	var resultUsers []*model.User
+	queryUser := model.User{
+		ID:       "",
+		Name:     "",
+		UserType: userType,
+	}
 
 	users, err := r.QueryUsers(queryUser)
 
@@ -65,17 +65,7 @@ func (r *queryResolver) Users(ctx context.Context, userType model.UserType) ([]*
 		return nil, err
 	}
 
-	for _, currentUser := range users {
-		resultUsers = append(resultUsers, &model.User{
-			ID:       currentUser.ID,
-			Name:     currentUser.Name,
-			UserType: currentUser.UserType,
-		})
-
-	}
-
-	return resultUsers, nil
-	//panic(fmt.Errorf("not implemented"))
+	return users, nil
 }
 
 // Mutation returns generated.MutationResolver implementation.
