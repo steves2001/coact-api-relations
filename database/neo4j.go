@@ -167,7 +167,7 @@ func NodeQuery(node MultiParamSearchNode) (*[]map[string]string, error) {
 		query.WriteString(" LIMIT " + strconv.FormatInt(node.SearchLimit, 10))
 	}
 
-	neo4jReadResult, neo4jReadErr := readNodesFromDB(query.String(), queryData)
+	neo4jReadResultPtr, neo4jReadErr := readNodesFromDB(query.String(), queryData)
 
 	//  read failed
 	if neo4jReadErr != nil {
@@ -176,13 +176,13 @@ func NodeQuery(node MultiParamSearchNode) (*[]map[string]string, error) {
 	}
 
 	// read found a result
-	if neo4jReadResult != nil {
+	if neo4jReadResultPtr != nil {
 
-		return neo4jReadResult, nil
+		return neo4jReadResultPtr, nil
 	}
 
 	// Catch all statement shouldn't execute but as a safety net.  Would require nil, nil readSingleNodeFromDB return
-	return nil, fmt.Errorf("node search returned an nil record set with nil errors")
+	return nil, fmt.Errorf("node search returned an empty record set with no errors")
 
 }
 
@@ -296,9 +296,9 @@ func readNodesFromDB(cypher string, params map[string]interface{}) (*[]map[strin
 			return transactionResult.Collect()
 		})
 
-	var m []map[string]string
+	usersSlice := make([]map[string]string, len(neo4jReadResult.([]*neo4j.Record)))
 
-	for _, node := range neo4jReadResult.([]*neo4j.Record) {
+	for index, node := range neo4jReadResult.([]*neo4j.Record) {
 
 		nodeProps := make(map[string]string, len(node.Values[0].(neo4j.Node).Props))
 
@@ -306,9 +306,9 @@ func readNodesFromDB(cypher string, params map[string]interface{}) (*[]map[strin
 			nodeProps[key] = fmt.Sprintf("%v", val)
 		}
 
-		m = append(m, nodeProps)
+		usersSlice[index] = nodeProps
 
 	}
 
-	return &m, neo4jReadErr
+	return &usersSlice, neo4jReadErr
 }
