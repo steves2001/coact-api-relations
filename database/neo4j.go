@@ -187,7 +187,6 @@ func NodeQuery(node MultiParamSearchNode) (*[]map[string]string, error) {
 }
 
 // Private functions
-
 func writeSingleNodeToDB(cypher string, params map[string]interface{}) (interface{}, error) {
 
 	// Open session
